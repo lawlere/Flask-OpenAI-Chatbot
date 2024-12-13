@@ -1,14 +1,21 @@
 # Import necessary libraries
 from flask import Flask, render_template, request, redirect
-import openai
+from openai import OpenAI
 import os
 import time
+from phoenix.otel import register
 
-# Set the OpenAI API key
-openai.api_key = "OPENAI_API"
+tracer_provider = register(
+  project_name="robot-chatbot",
+  endpoint="https://app.phoenix.arize.com/v1/traces"
+)
+
+from openinference.instrumentation.openai import OpenAIInstrumentor
+
+OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
 
 # Define the name of the bot
-name = 'BOT'
+name = 'Robot'
 
 # Define the role of the bot
 role = 'customer service'
@@ -42,11 +49,12 @@ chat_history = ''
 
 # Create a Flask web application
 app = Flask(__name__)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Function to complete chat input using OpenAI's GPT-3.5 Turbo
 def chatcompletion(user_input, impersonated_role, explicit_input, chat_history):
-    output = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo-0301",
+    output = client.chat.completions.create(
+        model="gpt-4",
         temperature=1,
         presence_penalty=0,
         frequency_penalty=0,
@@ -56,10 +64,8 @@ def chatcompletion(user_input, impersonated_role, explicit_input, chat_history):
             {"role": "user", "content": f"{user_input}. {explicit_input}"},
         ]
     )
-
-    for item in output['choices']:
-        chatgpt_output = item['message']['content']
-
+    
+    chatgpt_output = output.choices[0].message.content
     return chatgpt_output
 
 # Function to handle user chat input
